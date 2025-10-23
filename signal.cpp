@@ -16,6 +16,7 @@ enum Color
 Color currentColor = VERMELHO;
 pid_t childPid;
 bool isParent = true;
+Color nextColor = VERDE;
 
 void sigint_handler(int sig)
 {
@@ -23,6 +24,12 @@ void sigint_handler(int sig)
     {
         currentColor = VERMELHO;
         cout << "\n[EMERGÊNCIA] Mudando para VERMELHO por Ctrl+C" << endl;
+    }
+    else
+    {
+        kill(childPid, SIGUSR1);
+        nextColor = VERDE;
+        alarm(3);
     }
 }
 
@@ -55,7 +62,28 @@ void sigusr2_handler(int sig)
 
 void sigalrm_handler(int sig)
 {
-    if (!isParent)
+    if (isParent)
+    {
+        switch (nextColor)
+        {
+        case VERMELHO:
+            kill(childPid, SIGUSR1);
+            nextColor = VERDE;
+            alarm(3);
+            break;
+        case VERDE:
+            kill(childPid, SIGALRM);
+            nextColor = AMARELO;
+            alarm(4);
+            break;
+        case AMARELO:
+            kill(childPid, SIGUSR2);
+            nextColor = VERMELHO;
+            alarm(2);
+            break;
+        }
+    }
+    else
     {
         currentColor = VERDE;
     }
@@ -78,13 +106,13 @@ void processoFilho()
         switch (currentColor)
         {
         case VERMELHO:
-            cout << "\r\033[2K\033[31mVERMELHO\033[0m" << flush;
+            cout << "\033[2K\033[31mVERMELHO\033[0m" << endl;
             break;
         case AMARELO:
-            cout << "\r\033[2K\033[33mAMARELO\033[0m" << flush;
+            cout << "\033[2K\033[33mAMARELO\033[0m" << endl;
             break;
         case VERDE:
-            cout << "\r\033[2K\033[32mVERDE\033[0m" << flush;
+            cout << "\033[2K\033[32mVERDE\033[0m" << endl;
             break;
         }
         sleep(1);
@@ -98,6 +126,7 @@ void processoPai(pid_t pid)
 
     signal(SIGINT, sigint_handler);
     signal(SIGTSTP, sigtstp_handler);
+    signal(SIGALRM, sigalrm_handler);
 
     cout << "[PAI] Processo pai iniciado (PID: " << getpid() << ")" << endl;
     cout << "[PAI] Controlando processo filho (PID: " << pid << ")" << endl;
@@ -107,18 +136,13 @@ void processoPai(pid_t pid)
     cout << "\nTemporização: VERMELHO (3s) → VERDE (4s) → AMARELO (2s)\n"
          << endl;
 
-    sleep(1);
+    kill(pid, SIGUSR1);
+    nextColor = VERDE;
+    alarm(3);
 
     while (true)
     {
-        kill(pid, SIGUSR1);
-        sleep(3);
-
-        kill(pid, SIGALRM);
-        sleep(4);
-
-        kill(pid, SIGUSR2);
-        sleep(2);
+        pause();
     }
 }
 
